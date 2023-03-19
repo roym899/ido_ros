@@ -1,24 +1,29 @@
+#include "nav_msgs/OccupancyGrid.h"
 #include "ros/ros.h"
-#include "std_msgs/String.h"
+#include "sensor_msgs/LaserScan.h"
 
 #include <sstream>
 
 // TODO make class for node
 
-void scanCallback(const std_msgs::String::ConstPtr& msg)
+void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
-  ROS_INFO("I heard: [%s]", msg->data.c_str());
+  ROS_INFO(
+      "I heard: angle min %f angle max %f angle increment %f",
+      msg->angle_min,
+      msg->angle_max,
+      msg->angle_increment);
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "talker");
+  ros::init(argc, argv, "ido_node");
 
-  ros::NodeHandle n;
+  ros::NodeHandle nh_priv("~");
+  ros::NodeHandle nh;
 
-  ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-
-  ros::Subscriber sub = n.subscribe("scan", 1000, scanCallback);
+  ros::Publisher occ_pub = nh_priv.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
+  ros::Subscriber sub = nh.subscribe("scan", 1000, scanCallback);
 
   ros::Rate loop_rate(10);
 
