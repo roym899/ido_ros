@@ -47,9 +47,6 @@ int main(int argc, char** argv)
   ros::Publisher occ_pub = nh_priv.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
   ros::Subscriber sub = nh.subscribe("scan", 1000, scanCallback);
 
-  ROS_INFO("%d\n", b);
-  ROS_INFO("%d\n", 1);
-
   // TODO support pose topic Pose2DStamped (custom message?) or PoseStamped (?)
 
   ros::Rate loop_rate(10);
