@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <sstream>
+#include <chrono>
 
 // TODO make these proper parameters
 const double WIDTH = 7;       // width of map in meters
@@ -20,20 +21,27 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     ROS_INFO("receiving scan");
+    auto start = std::chrono::high_resolution_clock::now();
+
     // 1. prediction step
     // 1.1. TODO prediction on prob using 2D convolution
     // 1.2. probs to log odds
     LogOddsGrid log_odds = probs_.toLogOdds();
 
-    // 2. update step
-    // 2.1. update log odds based on scan using ray casting
-    log_odds.insertScan(*msg);
-    // 2.2. convert log odds to probabilities
+    /* // 2. update step */
+    /* // 2.1. update log odds based on scan using ray casting */
+    /* log_odds.insertScan(*msg); */
+    /* // 2.2. convert log odds to probabilities */
     probs_ = log_odds.toProbs();
-    // 2.3. convert to ROS message
+    /* // 2.3. convert to ROS message */
     auto occupancy_grid_msg = probs_.toOccupancyGridMsg();
-    // 2.4. publish ROS Message
+    /* // 2.4. publish ROS Message */
     occ_pub_.publish(occupancy_grid_msg);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> a = end - start;
+
+    ROS_INFO("published scan (callback took %fs)", a.count());
 }
 
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
