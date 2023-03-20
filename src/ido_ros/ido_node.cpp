@@ -1,9 +1,11 @@
-#include "nav_msgs/OccupancyGrid.h"
-#include "ros/ros.h"
-#include "sensor_msgs/LaserScan.h"
-#include "geometry_msgs/Pose2D.h"
+#include <ido_ros/ido_node.h>
 
 #include <sstream>
+
+#include <nav_msgs/OccupancyGrid.h>
+#include <ros/ros.h>
+#include <sensor_msgs/LaserScan.h>
+#include <geometry_msgs/Pose2D.h>
 
 struct Matrix2D {
   Matrix2D(size_t rows, size_t cols, double value=0.0) 
@@ -21,8 +23,6 @@ struct ProbabilityGrid {
   nav_msgs::OccupancyGrid toOccupancyGrid() const;
 };
 
-extern ProbabilityGrid probs;
-
 struct LogOddsGrid {
   LogOddsGrid(size_t rows, size_t cols, double prior=0.0)
     : log_odds(rows, cols, prior) {}
@@ -36,6 +36,9 @@ struct LogOddsGrid {
   }
   Matrix2D log_odds;
 };
+
+
+extern ProbabilityGrid probs;
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const {
   // TODO implement conversion
@@ -51,6 +54,7 @@ int8_t& at(nav_msgs::OccupancyGrid& occupancy_grid, int x, int y)
 
 void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
+  ROS_INFO("receiving scan");
   // 1. prediction step
   // 1.1. TODO prediction on prob using 2D convolution
   // 1.2. probs to log odds
@@ -78,12 +82,15 @@ int main(int argc, char** argv)
   ros::NodeHandle nh_priv("~");
   ros::NodeHandle nh;
 
+  ROS_INFO("start");
+
   ros::Publisher occ_pub = nh_priv.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
-  ros::Subscriber sub = nh.subscribe("scan", 1000, scanCallback);
+  ros::Subscriber sub = nh.subscribe("/scan", 1000, scanCallback);
 
-  // TODO support pose topic Pose2DStamped (custom message?) or PoseStamped (?)
+  // TODO support pose topic Pose2DStamped (custom message, nav 2d package?),
+  //  or use 3D PoseStamped (?)
 
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(100);
 
   ros::spin();
 
