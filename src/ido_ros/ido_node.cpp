@@ -2,7 +2,11 @@
 
 #include <sstream>
 
-extern ProbabilityGrid probs;
+// TODO make these proper parameters
+const double WIDTH = 7;       // width of map in meters
+const double HEIGHT = 7;      // height of map in meters
+const size_t RESOLUTION = 15; // cells per meter
+const double PRIOR_PROB = 0.5;
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const
 {
@@ -17,13 +21,13 @@ int8_t& at(nav_msgs::OccupancyGrid& occupancy_grid, int x, int y)
     return occupancy_grid.data[y * occupancy_grid.info.width + x];
 }
 
-void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
+void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     ROS_INFO("receiving scan");
     // 1. prediction step
     // 1.1. TODO prediction on prob using 2D convolution
     // 1.2. probs to log odds
-    LogOddsGrid log_odds(probs);
+    LogOddsGrid log_odds(probs_);
 
     // 2. update step
     // 2.1. update log odds based on scan using ray casting
@@ -32,10 +36,10 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 }
 
 IDONode::IDONode()
-    : nh_priv_("~")
+    : nh_priv_("~"), probs_(HEIGHT * RESOLUTION, WIDTH * RESOLUTION, PRIOR_PROB)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
-    scan_sub_ = nh_.subscribe("/scan", 1000, scanCallback);
+    scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);
 }
 
 int IDONode::run() {
@@ -47,15 +51,6 @@ int IDONode::run() {
     ros::spin();
     return 0;
 }
-
-// TODO make class instead of globals
-nav_msgs::OccupancyGrid occupancy_grid;
-const double WIDTH = 7;       // width of map in meters
-const double HEIGHT = 7;      // height of map in meters
-const size_t RESOLUTION = 15; // cells per meter
-const double PRIOR_PROB = 0.5;
-
-ProbabilityGrid probs(HEIGHT* RESOLUTION, WIDTH* RESOLUTION, PRIOR_PROB);
 
 int main(int argc, char** argv)
 {

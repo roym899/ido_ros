@@ -56,4 +56,8 @@ private:
 
     ros::Publisher occ_pub_;
     ros::Subscriber scan_sub_;
+
+    ProbabilityGrid probs_;
+
+    void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
 };
