@@ -11,13 +11,30 @@ const double HEIGHT = 7;  // height of map in meters
 const size_t RESOLUTION = 15;  // cells per meter
 const double PRIOR_PROB = 0.5;
 
+struct Matrix2D {
+  Matrix2D(size_t rows, size_t cols, double value=0.0) 
+    : data(rows * cols, value), rows(rows), cols(cols) {}
+  std::vector<double> data;
+  const size_t rows;
+  const size_t cols;
+};
+
 struct ProbabilityGrid {
-  ProbabilityGrid(size_t width, size_t height, double a=0.5)
-    : probabilities(width * height, a), width(width), height(height) {}
-  std::vector<double> probabilities;
-  size_t width;
-  size_t height;
+  ProbabilityGrid(size_t rows, size_t cols, double prior=0.5)
+    : probabilities(rows, cols, prior) {}
+  Matrix2D probabilities;
   nav_msgs::OccupancyGrid toOccupancyGrid() const;
+};
+
+struct LogOddsGrid {
+  LogOddsGrid(size_t rows, size_t cols, double prior=0.0)
+    : log_odds(rows, cols, prior) {}
+  LogOddsGrid(const ProbabilityGrid& probability_grid) 
+    : log_odds(probability_grid.probabilities.rows, probability_grid.probabilities.cols) {
+      // NOTE would be better to somehow skip value initialization here
+      // TODO convert probability grid to log odds grid
+  }
+  Matrix2D log_odds;
 };
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const {
@@ -27,7 +44,7 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const {
   return nav_msgs::OccupancyGrid();
 }
 
-ProbabilityGrid cur_map(WIDTH * RESOLUTION, HEIGHT * RESOLUTION, PRIOR_PROB);
+ProbabilityGrid probs(HEIGHT * RESOLUTION, WIDTH * RESOLUTION, PRIOR_PROB);
 
 int8_t& at(nav_msgs::OccupancyGrid& occupancy_grid, int x, int y)
 {
@@ -36,13 +53,14 @@ int8_t& at(nav_msgs::OccupancyGrid& occupancy_grid, int x, int y)
 
 void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
-  // TODO prediction step
-  //  1. prediction on prob using 2D convolution
-  //  2. probs to log odds
+  // 1. prediction step
+  //  1.1. TODO prediction on prob using 2D convolution
+  //  1.2. probs to log odds
+  LogOddsGrid log_odds(probs);
 
-  // TODO update step 
-  //  1. update log odds through addition with ray casting
-  //  2. convert log odds to probabilities and publish ROS message based on that
+  // 2. update step 
+  //  2.1. TODO update log odds through addition with ray casting
+  //  2.2. TODO convert log odds to probabilities and publish ROS message based on that
 }
 
 int main(int argc, char** argv)
