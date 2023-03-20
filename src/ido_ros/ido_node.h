@@ -8,27 +8,27 @@
 class LogOddsGrid;
 
 struct Matrix2D {
-    Matrix2D(size_t rows, size_t cols, double value = 0.0)
+    Matrix2D(size_t rows, size_t cols, float value = 0.0)
         : data(rows * cols, value)
         , rows(rows)
         , cols(cols)
     {
     }
-    std::vector<double> data;
+    std::vector<float> data;
     size_t rows;
     size_t cols;
-    const double& operator()(const size_t i, const size_t j) const
+    const float& operator()(const size_t i, const size_t j) const
     {
         return data[cols * i + j];
     };
-    double& operator()(const size_t i, const size_t j)
+    float& operator()(const size_t i, const size_t j)
     {
-        return const_cast<double&>((*const_cast<const Matrix2D*>(this))(i, j));
+        return const_cast<float&>((*const_cast<const Matrix2D*>(this))(i, j));
     };
 };
 
 struct ProbabilityGrid : Matrix2D {
-    ProbabilityGrid(size_t rows, size_t cols, double prior = 0.5)
+    ProbabilityGrid(size_t rows, size_t cols, float prior = 0.5)
         : Matrix2D(rows, cols, prior)
     {
     }
@@ -38,11 +38,12 @@ struct ProbabilityGrid : Matrix2D {
 };
 
 struct LogOddsGrid : Matrix2D {
-    LogOddsGrid(size_t rows, size_t cols, double prior = 0.0)
+    LogOddsGrid(size_t rows, size_t cols, float prior = 0.0)
         : Matrix2D(rows, cols, prior)
     {
     }
     void insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose = geometry_msgs::Pose2D());
+    void insertRay(float x, float y, float angle, float range);
     ProbabilityGrid toProbs() const;
 };
 

@@ -5,10 +5,18 @@
 #include <sstream>
 
 // TODO make these proper parameters
-const double WIDTH = 7;  // width of map in meters
-const double HEIGHT = 7; // height of map in meters
+const float WIDTH = 7;  // width of map in meters
+const float HEIGHT = 7; // height of map in meters
 const size_t CELLS_PER_METER = 15;
-const double PRIOR_PROB = 0.5;
+const float PRIOR_PROB = 0.5;
+
+void fix_angle(float& angle) {
+    angle = std::fmod(angle + M_PI, 2*M_PI);
+    if (angle < 0)
+        angle += M_PI;
+    else
+      angle -= M_PI;
+}
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 {
@@ -29,7 +37,7 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
     msg.data = std::vector<int8_t>(rows * cols);
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
-            msg.data[i * cols + j] = std::round((*this)(i, j) / 100.0);
+            msg.data[i * cols + j] = std::round((*this)(i, j) * 100.0);
         }
     }
 
@@ -57,14 +65,84 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     occ_pub_.publish(occupancy_grid_msg);
 
     auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> a = end - start;
+    std::chrono::duration<float> a = end - start;
 
     ROS_INFO("published scan (callback took %fs)", a.count());
 }
 
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
 {
-    // TODO insert scan in log odds using ray casting
+    float laser_angle = msg.angle_min; 
+    for (const auto& range: msg.ranges) {
+        // offset the particle based on the lidar position
+        fix_angle(laser_angle);
+        insertRay(pose.x, pose.y, laser_angle, range);
+        laser_angle += msg.angle_increment;
+        /* ROS_INFO("%f\n", laser_angle); */
+    }
+}
+
+void LogOddsGrid::insertRay(float x, float y, float angle, float range)
+{
+    // TODO check point to cell and ray cast is all correct
+    x = (x + WIDTH / 2) * CELLS_PER_METER;
+    y = (y + HEIGHT / 2) * CELLS_PER_METER;
+
+    float x_start = x;
+    float y_start = y;
+
+    int x_discrete = std::floor(x);
+    int y_discrete = std::floor(y);
+
+    float v_x = cos(angle);
+    float v_y = sin(angle);
+
+    int step_x = std::abs(angle) <= M_PI / 2 ? 1 : -1;
+    int step_y = angle > 0 ? 1 : -1;
+
+    // given the ray (x,y)+t*(vx,vy), check for which t the next cell in x and y direction is reached
+    float x_boundary = step_x > 0 ? std::ceil(x) : std::floor(x);
+    float y_boundary = step_y > 0 ? std::ceil(y) : std::floor(y);
+    float t_max_x = (x_boundary - x) / v_x;
+    float t_max_y = (y_boundary - y) / v_y;
+
+    // how far to increase t in x and y to go through a whole grid cell
+    float t_delta_x = std::abs(1 / v_x);
+    float t_delta_y = std::abs(1 / v_y);
+
+    // iterate until out of map or range reached 
+    while (std::sqrt(std::pow(x_discrete - x, 2) + std::pow(y_discrete - y, 2)) / CELLS_PER_METER < range - 1 / CELLS_PER_METER) {
+        if ((*this)(x_discrete, y_discrete) == 100)
+            break;
+
+        if (x_discrete < 0 || x_discrete > cols) {
+            break;
+        }
+        else if (y_discrete < 0 || y_discrete > rows) {
+            break;
+        }
+        else if ((*this)(y_discrete, x_discrete) >= -10 ){
+            (*this)(y_discrete, x_discrete) -= 1;
+        }
+
+        // go to next cell
+        if (t_max_x < t_max_y) {
+            t_max_x = t_max_x + t_delta_x;
+            x_discrete = x_discrete + step_x;
+        } else {
+            t_max_y = t_max_y + t_delta_y;
+            y_discrete = y_discrete + step_y;
+        }
+    }
+    if (x_discrete < 0 || x_discrete > cols) {
+        return;
+    }
+    else if (y_discrete < 0 || y_discrete > rows) {
+        return;
+    }
+    if((*this)(y_discrete, x_discrete) < 10) {
+        (*this)(y_discrete, x_discrete) += 5;
+    }
 }
 
 ProbabilityGrid LogOddsGrid::toProbs() const
@@ -72,8 +150,8 @@ ProbabilityGrid LogOddsGrid::toProbs() const
     ProbabilityGrid probs(rows, cols);
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
-            double prob = std::exp((*this)(i, j));
-            probs(i, j) = 1 / (1 - prob);
+            float odds = std::exp((*this)(i, j));
+            probs(i, j) = odds / (odds + 1);
         }
     }
     return probs;
@@ -84,7 +162,7 @@ LogOddsGrid ProbabilityGrid::toLogOdds() const
     LogOddsGrid log_odds(rows, cols);
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
-            double odds = (*this)(i, j) / (1 - (*this)(i, j));
+            float odds = (*this)(i, j) / (1 - (*this)(i, j));
             log_odds(i, j) = std::log(odds);
         }
     }
