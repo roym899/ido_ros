@@ -9,7 +9,7 @@ const double HEIGHT = 7;      // height of map in meters
 const size_t RESOLUTION = 15; // cells per meter
 const double PRIOR_PROB = 0.5;
 
-nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const
+nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 {
     // TODO implement conversion
     //  1. set header, width, height
@@ -30,8 +30,10 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     log_odds.insertScan(*msg);
     // 2.2. convert log odds to probabilities
     probs_ = log_odds.toProbs();
-    // 2.3. TODO conver to ROS message
-    // 2.4. TODO publish ROS Message
+    // 2.3. convert to ROS message
+    auto occupancy_grid_msg = probs_.toOccupancyGridMsg();
+    // 2.4. publish ROS Message
+    occ_pub_.publish(occupancy_grid_msg);
 }
 
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)

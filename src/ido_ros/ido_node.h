@@ -33,7 +33,7 @@ struct ProbabilityGrid : Matrix2D {
     {
     }
     void predictTransitions(const Matrix2D& kernel);
-    nav_msgs::OccupancyGrid toOccupancyGrid() const;
+    nav_msgs::OccupancyGrid toOccupancyGridMsg() const;
     LogOddsGrid toLogOdds() const;
 };
 
