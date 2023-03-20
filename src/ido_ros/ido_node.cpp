@@ -1,21 +1,39 @@
 #include <ido_ros/ido_node.h>
 
+#include <chrono>
 #include <cmath>
 #include <sstream>
-#include <chrono>
 
 // TODO make these proper parameters
-const double WIDTH = 7;       // width of map in meters
-const double HEIGHT = 7;      // height of map in meters
-const size_t RESOLUTION = 15; // cells per meter
+const double WIDTH = 7;  // width of map in meters
+const double HEIGHT = 7; // height of map in meters
+const size_t CELLS_PER_METER = 15;
 const double PRIOR_PROB = 0.5;
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 {
-    // TODO implement conversion
-    //  1. set header, width, height
-    //  2. convert to int8 (0-100) range, see docs of OccupancyGrid
-    return nav_msgs::OccupancyGrid();
+    nav_msgs::OccupancyGrid msg;
+
+    // 1. set header, width, height
+    msg.header.frame_id = "base_scan";
+    msg.header.stamp = ros::Time::now();
+    msg.info.width = cols;
+    msg.info.height = rows;
+    msg.info.resolution = 1.0 / CELLS_PER_METER;
+
+    // center at 0, 0 for now
+    msg.info.origin.position.x = -0.5 * WIDTH;
+    msg.info.origin.position.y = -0.5 * HEIGHT;
+
+    // 2. convert to int8 (0-100) range, see docs of OccupancyGrid
+    msg.data = std::vector<int8_t>(rows * cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            msg.data[i * cols + j] = std::round((*this)(i, j) / 100.0);
+        }
+    }
+
+    return msg;
 }
 
 void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
@@ -75,7 +93,7 @@ LogOddsGrid ProbabilityGrid::toLogOdds() const
 
 IDONode::IDONode()
     : nh_priv_("~")
-    , probs_(HEIGHT * RESOLUTION, WIDTH * RESOLUTION, PRIOR_PROB)
+    , probs_(HEIGHT * CELLS_PER_METER, WIDTH * CELLS_PER_METER, PRIOR_PROB)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
     scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);
