@@ -1,5 +1,6 @@
 #include <ido_ros/ido_node.h>
 
+#include <cmath>
 #include <sstream>
 
 // TODO make these proper parameters
@@ -27,22 +28,56 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 1. prediction step
     // 1.1. TODO prediction on prob using 2D convolution
     // 1.2. probs to log odds
-    LogOddsGrid log_odds(probs_);
+    LogOddsGrid log_odds = probs_.toLogOdds();
 
     // 2. update step
     // 2.1. update log odds based on scan using ray casting
     log_odds.insertScan(*msg);
-    // 2.2. TODO convert log odds to probabilities and publish ROS message based on that
+    // 2.2. convert log odds to probabilities
+    probs_ = log_odds.toProbs();
+    // 2.3. TODO conver to ROS message
+    // 2.4. TODO publish ROS Message
+}
+
+void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
+{
+    // TODO insert scan in log odds using ray casting
+}
+
+ProbabilityGrid LogOddsGrid::toProbs() const
+{
+    ProbabilityGrid probs(rows, cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            double prob = std::exp((*this)(i, j));
+            probs(i, j) = 1 / (1 - prob);
+        }
+    }
+    return probs;
+}
+
+LogOddsGrid ProbabilityGrid::toLogOdds() const
+{
+    LogOddsGrid log_odds(rows, cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            double odds = (*this)(i, j) / (1 - (*this)(i, j));
+            log_odds(i, j) = std::log(odds);
+        }
+    }
+    return log_odds;
 }
 
 IDONode::IDONode()
-    : nh_priv_("~"), probs_(HEIGHT * RESOLUTION, WIDTH * RESOLUTION, PRIOR_PROB)
+    : nh_priv_("~")
+    , probs_(HEIGHT * RESOLUTION, WIDTH * RESOLUTION, PRIOR_PROB)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
     scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);
 }
 
-int IDONode::run() {
+int IDONode::run()
+{
     // TODO support pose topic Pose2DStamped (custom message, nav 2d package?),
     //  or use 3D PoseStamped (?)
 

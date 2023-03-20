@@ -5,6 +5,8 @@
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
 
+class LogOddsGrid;
+
 struct Matrix2D {
     Matrix2D(size_t rows, size_t cols, double value = 0.0)
         : data(rows * cols, value)
@@ -13,36 +15,35 @@ struct Matrix2D {
     {
     }
     std::vector<double> data;
-    const size_t rows;
-    const size_t cols;
+    size_t rows;
+    size_t cols;
+    const double& operator()(const size_t i, const size_t j) const
+    {
+        return data[rows * i + j];
+    };
+    double& operator()(const size_t i, const size_t j)
+    {
+        return const_cast<double&>((*const_cast<const Matrix2D*>(this))(i, j));
+    };
 };
 
-struct ProbabilityGrid {
+struct ProbabilityGrid : Matrix2D {
     ProbabilityGrid(size_t rows, size_t cols, double prior = 0.5)
-        : probabilities(rows, cols, prior)
+        : Matrix2D(rows, cols, prior)
     {
     }
-    Matrix2D probabilities;
     void predictTransitions(const Matrix2D& kernel);
     nav_msgs::OccupancyGrid toOccupancyGrid() const;
+    LogOddsGrid toLogOdds() const;
 };
 
-struct LogOddsGrid {
+struct LogOddsGrid : Matrix2D {
     LogOddsGrid(size_t rows, size_t cols, double prior = 0.0)
-        : log_odds(rows, cols, prior)
+        : Matrix2D(rows, cols, prior)
     {
     }
-    LogOddsGrid(const ProbabilityGrid& probability_grid)
-        : log_odds(probability_grid.probabilities.rows, probability_grid.probabilities.cols)
-    {
-        // NOTE would be better to somehow skip value initialization here
-        // TODO convert probability grid to log odds grid
-    }
-    void insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose = geometry_msgs::Pose2D())
-    {
-        // TODO insert the laser scan at the specified pose
-    }
-    Matrix2D log_odds;
+    void insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose = geometry_msgs::Pose2D());
+    ProbabilityGrid toProbs() const;
 };
 
 class IDONode {
