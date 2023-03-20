@@ -19,7 +19,7 @@ struct Matrix2D {
     size_t cols;
     const double& operator()(const size_t i, const size_t j) const
     {
-        return data[rows * i + j];
+        return data[cols * i + j];
     };
     double& operator()(const size_t i, const size_t j)
     {

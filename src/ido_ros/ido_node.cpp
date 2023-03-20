@@ -17,11 +17,6 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGrid() const
     return nav_msgs::OccupancyGrid();
 }
 
-int8_t& at(nav_msgs::OccupancyGrid& occupancy_grid, int x, int y)
-{
-    return occupancy_grid.data[y * occupancy_grid.info.width + x];
-}
-
 void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     ROS_INFO("receiving scan");
