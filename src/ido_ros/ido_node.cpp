@@ -4,11 +4,14 @@
 #include <cmath>
 #include <sstream>
 
+#include <cstdlib>
+
 // TODO make these proper parameters
 const float WIDTH = 7;  // width of map in meters
 const float HEIGHT = 7; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
+const float MAX_VEL = 0.5;
 
 void fix_angle(float& angle) {
     angle = std::fmod(angle + M_PI, 2*M_PI);
@@ -142,12 +145,31 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
         return;
     }
     if((*this)(y_discrete, x_discrete) < 10) {
-        (*this)(y_discrete, x_discrete) += 5;
+        (*this)(y_discrete, x_discrete) += 1;
     }
 }
 
 void IDONode::initKernel() {
-    // TODO init motion kernel
+    const float max_cells = MAX_VEL * CELLS_PER_METER;
+    const size_t kernel_size = std::floor(max_cells);
+    kernel_ = Matrix2D (2*kernel_size + 1, 2*kernel_size + 1, 0.0);
+    const int center = kernel_size;
+    size_t counter = 0;
+    for(int i=0; i<kernel_.rows; ++i) {
+        for(int j=0; j<kernel_.cols; ++j) {
+            float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
+            if(cell_distance < max_cells)
+                ++counter;
+        }
+    }
+    const float value = 1.0 / counter;
+    for(int i=0; i<kernel_.rows; ++i) {
+        for(int j=0; j<kernel_.cols; ++j) {
+            float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
+            if(cell_distance < max_cells)
+                kernel_(i, j) = value;
+        }
+    }
 }
 
 ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const {
@@ -183,9 +205,11 @@ LogOddsGrid ProbabilityGrid::toLogOdds() const
 IDONode::IDONode()
     : nh_priv_("~")
     , probs_(HEIGHT * CELLS_PER_METER, WIDTH * CELLS_PER_METER, PRIOR_PROB)
+    , kernel_(0,0,0)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
     scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);
+    initKernel();
 }
 
 int IDONode::run()
