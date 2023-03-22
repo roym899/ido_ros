@@ -50,7 +50,8 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     auto start = std::chrono::high_resolution_clock::now();
 
     // 1. prediction step
-    // 1.1. TODO prediction on prob using 2D convolution
+    // 1.1. prediction on prob using 2D convolution
+    probs_ = predictMotion(probs_);
     // 1.2. probs to log odds
     LogOddsGrid log_odds = probs_.toLogOdds();
 
@@ -143,6 +144,16 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
     if((*this)(y_discrete, x_discrete) < 10) {
         (*this)(y_discrete, x_discrete) += 5;
     }
+}
+
+void IDONode::initKernel() {
+    // TODO init motion kernel
+}
+
+ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const {
+    ProbabilityGrid prediction(occ_probs.rows, occ_probs.rows);
+    // TODO convolution of occ_prob and kernel
+    return prediction;
 }
 
 ProbabilityGrid LogOddsGrid::toProbs() const

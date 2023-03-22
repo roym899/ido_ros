@@ -62,4 +62,6 @@ private:
     ProbabilityGrid probs_;
 
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
+    void initKernel();
+    ProbabilityGrid predictMotion(const ProbabilityGrid& occ_probs) const;
 };
