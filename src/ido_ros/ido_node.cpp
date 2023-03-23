@@ -11,14 +11,15 @@ const float WIDTH = 7;  // width of map in meters
 const float HEIGHT = 7; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
-const float MAX_VEL = 0.5;
+const float MAX_VEL = 0.3;
 
-void fix_angle(float& angle) {
-    angle = std::fmod(angle + M_PI, 2*M_PI);
+void fix_angle(float& angle)
+{
+    angle = std::fmod(angle + M_PI, 2 * M_PI);
     if (angle < 0)
         angle += M_PI;
     else
-      angle -= M_PI;
+        angle -= M_PI;
 }
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
@@ -76,8 +77,8 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
 {
-    float laser_angle = msg.angle_min; 
-    for (const auto& range: msg.ranges) {
+    float laser_angle = msg.angle_min;
+    for (const auto& range : msg.ranges) {
         // offset the particle based on the lidar position
         fix_angle(laser_angle);
         insertRay(pose.x, pose.y, laser_angle, range);
@@ -114,18 +115,16 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
     float t_delta_x = std::abs(1 / v_x);
     float t_delta_y = std::abs(1 / v_y);
 
-    // iterate until out of map or range reached 
+    // iterate until out of map or range reached
     while (std::sqrt(std::pow(x_discrete - x, 2) + std::pow(y_discrete - y, 2)) / CELLS_PER_METER < range - 1 / CELLS_PER_METER) {
         if ((*this)(x_discrete, y_discrete) == 100)
             break;
 
         if (x_discrete < 0 || x_discrete > cols) {
             break;
-        }
-        else if (y_discrete < 0 || y_discrete > rows) {
+        } else if (y_discrete < 0 || y_discrete > rows) {
             break;
-        }
-        else if ((*this)(y_discrete, x_discrete) >= -10 ){
+        } else if ((*this)(y_discrete, x_discrete) >= -10) {
             (*this)(y_discrete, x_discrete) -= 1;
         }
 
@@ -140,41 +139,60 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
     }
     if (x_discrete < 0 || x_discrete > cols) {
         return;
-    }
-    else if (y_discrete < 0 || y_discrete > rows) {
+    } else if (y_discrete < 0 || y_discrete > rows) {
         return;
     }
-    if((*this)(y_discrete, x_discrete) < 10) {
-        (*this)(y_discrete, x_discrete) += 1;
+    if ((*this)(y_discrete, x_discrete) < 10) {
+        (*this)(y_discrete, x_discrete) += 5;
     }
 }
 
-void IDONode::initKernel() {
+void IDONode::initKernel()
+{
     const float max_cells = MAX_VEL * CELLS_PER_METER;
     const size_t kernel_size = std::floor(max_cells);
-    kernel_ = Matrix2D (2*kernel_size + 1, 2*kernel_size + 1, 0.0);
+    kernel_ = Matrix2D(2 * kernel_size + 1, 2 * kernel_size + 1, 0.0);
     const int center = kernel_size;
     size_t counter = 0;
-    for(int i=0; i<kernel_.rows; ++i) {
-        for(int j=0; j<kernel_.cols; ++j) {
+    for (int i = 0; i < kernel_.rows; ++i) {
+        for (int j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
-            if(cell_distance < max_cells)
+            if (cell_distance < max_cells)
                 ++counter;
         }
     }
     const float value = 1.0 / counter;
-    for(int i=0; i<kernel_.rows; ++i) {
-        for(int j=0; j<kernel_.cols; ++j) {
+    for (int i = 0; i < kernel_.rows; ++i) {
+        for (int j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
-            if(cell_distance < max_cells)
+            if (cell_distance < max_cells)
                 kernel_(i, j) = value;
+            std::cout << kernel_(i, j) << " ";
         }
+        std::cout << std::endl;
     }
+    kernel_center_ = center;
+    std::cout << kernel_center_ << " " << kernel_.rows << std::endl;
 }
 
-ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const {
-    ProbabilityGrid prediction(occ_probs.rows, occ_probs.rows);
-    // TODO convolution of occ_prob and kernel
+ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const
+{
+    ProbabilityGrid prediction(occ_probs.rows, occ_probs.cols, 0.0);
+    for (int i = 0; i < occ_probs.rows; ++i) {
+        for (int j = 0; j < occ_probs.cols; ++j) {
+            for (int k = 0; k < kernel_.rows; ++k) {
+                for (int l = 0; l < kernel_.cols; ++l) {
+                    if (i - kernel_center_ + k < 0 || i - kernel_center_ + k >= occ_probs.rows
+                        || j - kernel_center_ + l < 0 || j - kernel_center_ + l >= occ_probs.cols)
+                        prediction(i, j) += 0.5 * kernel_(k, l);
+                    else {
+                        prediction(i, j) += 
+                            occ_probs(i - kernel_center_ + k, j - kernel_center_ + l) * kernel_(k, l);
+                    }
+                }
+            }
+        }
+    }
     return prediction;
 }
 
@@ -205,7 +223,7 @@ LogOddsGrid ProbabilityGrid::toLogOdds() const
 IDONode::IDONode()
     : nh_priv_("~")
     , probs_(HEIGHT * CELLS_PER_METER, WIDTH * CELLS_PER_METER, PRIOR_PROB)
-    , kernel_(0,0,0)
+    , kernel_(0, 0, 0)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
     scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);

@@ -62,6 +62,7 @@ private:
     ProbabilityGrid probs_;
 
     Matrix2D kernel_;
+    size_t kernel_center_;
 
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
     void initKernel();
