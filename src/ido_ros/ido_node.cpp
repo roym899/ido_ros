@@ -116,7 +116,7 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
     float t_delta_y = std::abs(1 / v_y);
 
     // iterate until out of map or range reached
-    while (std::sqrt(std::pow(x_discrete - x, 2) + std::pow(y_discrete - y, 2)) / CELLS_PER_METER < range - 1 / CELLS_PER_METER) {
+    while (std::sqrt(std::pow(x_discrete + 0.5 - x, 2) + std::pow(y_discrete + 0.5 - y, 2)) / CELLS_PER_METER < range - 0.5 / CELLS_PER_METER) {
         if ((*this)(x_discrete, y_discrete) == 100)
             break;
 
