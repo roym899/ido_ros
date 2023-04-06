@@ -77,7 +77,7 @@ add_executable(${PROJECT_NAME}_node src/ido_ros/ido_node.cpp)
 # change output name -> rosrun ido_ros node
 set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} OpenMP::OpenMP_CXX)
+target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} gomp)
 
 #############
 ## Install ##
