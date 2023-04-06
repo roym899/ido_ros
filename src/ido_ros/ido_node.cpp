@@ -241,7 +241,7 @@ IDONode::IDONode()
     , kernel_(0, 0, 0)
 {
     occ_pub_ = nh_priv_.advertise<nav_msgs::OccupancyGrid>("occupancy", 1000);
-    scan_sub_ = nh_.subscribe("/scan", 1000, &IDONode::scanCallback, this);
+    scan_sub_ = nh_.subscribe("/scan", 1, &IDONode::scanCallback, this);
     initKernel();
 }
 
