@@ -17,6 +17,18 @@ find_package(catkin REQUIRED COMPONENTS
 )
 find_package(OpenMP)
 
+if(NOT TARGET OpenMP::OpenMP_CXX)
+    find_package(Threads REQUIRED)
+    add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
+    set_property(TARGET OpenMP::OpenMP_CXX
+                 PROPERTY INTERFACE_COMPILE_OPTIONS ${OpenMP_CXX_FLAGS})
+    # Only works if the same flag is passed to the linker; use CMake 3.9+ otherwise (Intel, AppleClang)
+    set_property(TARGET OpenMP::OpenMP_CXX
+                 PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
+
+endif()
+
+
 ## System dependencies are found with CMake's conventions
 # TODO opencv if naive convolution is not fast enough
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -77,7 +89,7 @@ add_executable(${PROJECT_NAME}_node src/ido_ros/ido_node.cpp)
 # change output name -> rosrun ido_ros node
 set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} gomp)
+target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} OpenMP::OpenMP_CXX)
 
 #############
 ## Install ##
