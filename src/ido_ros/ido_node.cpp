@@ -11,7 +11,9 @@ const float WIDTH = 7;  // width of map in meters
 const float HEIGHT = 7; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
-const float MAX_VEL = 0.3;
+const float MAX_VEL = 0.07;
+const bool SKIP_NORETURN = true;
+const float RANGE_NORETURN = 10.0; // only used if SKIP_NORETURN == False
 
 void fix_angle(float& angle)
 {
@@ -91,9 +93,12 @@ void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_m
     for (const auto& range : msg.ranges) {
         // offset the particle based on the lidar position
         fix_angle(laser_angle);
-        insertRay(pose.x, pose.y, laser_angle, range);
+        if (range != 0.0)
+            insertRay(pose.x, pose.y, laser_angle, range);
+        else if (not SKIP_NORETURN)
+            insertRay(pose.x, pose.y, laser_angle, RANGE_NORETURN);
         laser_angle += msg.angle_increment;
-        /* ROS_INFO("%f\n", laser_angle); */
+        /* ROS_INFO("%f %f\n", laser_angle, range); */
     }
 }
 
