@@ -51,17 +51,24 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     ROS_INFO("receiving scan");
+
     auto start = std::chrono::high_resolution_clock::now();
 
     // 1. prediction step
     // 1.1. prediction on prob using 2D convolution
+    auto start_p = std::chrono::high_resolution_clock::now();
     probs_ = predictMotion(probs_);
+    std::chrono::duration<float> time_prediction = std::chrono::high_resolution_clock::now() - start_p;
+
     // 1.2. probs to log odds
     LogOddsGrid log_odds = probs_.toLogOdds();
 
     // 2. update step
     // 2.1. update log odds based on scan using ray casting
+    auto start_u = std::chrono::high_resolution_clock::now();
     log_odds.insertScan(*msg);
+    std::chrono::duration<float> time_update = std::chrono::high_resolution_clock::now() - start;
+
     // 2.2. convert log odds to probabilities
     probs_ = log_odds.toProbs();
     // 2.3. convert to ROS message
@@ -69,10 +76,13 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 2.4. publish ROS Message
     occ_pub_.publish(occupancy_grid_msg);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<float> a = end - start;
+    std::chrono::duration<float> time = std::chrono::high_resolution_clock::now() - start;
 
-    ROS_INFO("published scan (callback took %fs)", a.count());
+    ROS_INFO(
+        "Prediction: %f Update: %f Total: %f ",
+        time_prediction.count(), 
+        time_update.count(), 
+        time.count());
 }
 
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
