@@ -48,8 +48,8 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 
     // 2. convert to int8 (0-100) range, see docs of OccupancyGrid
     msg.data = std::vector<int8_t>(rows * cols);
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
             msg.data[i * cols + j] = std::round((*this)(i, j) * 100.0);
         }
     }
@@ -64,7 +64,7 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 1. prediction step
     // 1.1. prediction on prob using 2D convolution
     auto start_p = std::chrono::high_resolution_clock::now();
-    for(int i=0; i<NUM_PREDICTION_STEPS; ++i)
+    for(size_t i=0; i<NUM_PREDICTION_STEPS; ++i)
         probs_ = predictMotion(probs_);
     std::chrono::duration<float> time_prediction = std::chrono::high_resolution_clock::now() - start_p;
 
@@ -114,9 +114,6 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
     x = (x + WIDTH / 2) * CELLS_PER_METER;
     y = (y + HEIGHT / 2) * CELLS_PER_METER;
 
-    float x_start = x;
-    float y_start = y;
-
     int x_discrete = std::floor(x);
     int y_discrete = std::floor(y);
 
@@ -138,9 +135,9 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
 
     // iterate until out of map or range reached
     while (std::sqrt(std::pow(x_discrete + 0.5 - x, 2) + std::pow(y_discrete + 0.5 - y, 2)) / CELLS_PER_METER < range - 0.5 / CELLS_PER_METER) {
-        if (x_discrete < 0 || x_discrete > cols) {
+        if (x_discrete < 0 || static_cast<size_t>(x_discrete) > cols) {
             break;
-        } else if (y_discrete < 0 || y_discrete > rows) {
+        } else if (y_discrete < 0 || static_cast<size_t>(y_discrete) > rows) {
             break;
         } else if ((*this)(y_discrete, x_discrete) >= -15) {
             (*this)(y_discrete, x_discrete) -= 5;
@@ -157,9 +154,9 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
     }
     if (no_return) // no return -> only clear, does not increase occupancy
         return;
-    else if (x_discrete < 0 || x_discrete > cols) {
+    else if (x_discrete < 0 || static_cast<size_t>(x_discrete) > cols) {
         return;
-    } else if (y_discrete < 0 || y_discrete > rows) {
+    } else if (y_discrete < 0 || static_cast<size_t>(y_discrete) > rows) {
         return;
     }
     if ((*this)(y_discrete, x_discrete) <= 15) {
@@ -174,16 +171,16 @@ void IDONode::initKernel()
     kernel_ = Matrix2D(2 * kernel_size + 1, 2 * kernel_size + 1, 0.0);
     const int center = kernel_size;
     size_t counter = 0;
-    for (int i = 0; i < kernel_.rows; ++i) {
-        for (int j = 0; j < kernel_.cols; ++j) {
+    for (size_t i = 0; i < kernel_.rows; ++i) {
+        for (size_t j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
             if (cell_distance <= cells_per_step)
                 ++counter;
         }
     }
     const float value = 1.0 / counter;
-    for (int i = 0; i < kernel_.rows; ++i) {
-        for (int j = 0; j < kernel_.cols; ++j) {
+    for (size_t i = 0; i < kernel_.rows; ++i) {
+        for (size_t j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
             if (cell_distance <= cells_per_step)
                 kernel_(i, j) = value;
@@ -221,8 +218,8 @@ ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const
 ProbabilityGrid LogOddsGrid::toProbs() const
 {
     ProbabilityGrid probs(rows, cols);
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
             float odds = std::exp((*this)(i, j));
             probs(i, j) = odds / (odds + 1);
         }
@@ -233,8 +230,8 @@ ProbabilityGrid LogOddsGrid::toProbs() const
 LogOddsGrid ProbabilityGrid::toLogOdds() const
 {
     LogOddsGrid log_odds(rows, cols);
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
             float odds = (*this)(i, j) / (1 - (*this)(i, j));
             log_odds(i, j) = std::log(odds);
         }
