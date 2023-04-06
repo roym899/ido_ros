@@ -14,9 +14,11 @@ const float HEIGHT = 9; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
 const float METER_PER_PREDICTIONSTEP = 0.1;  // i.e., computed from max velocity
-const float NUM_PREDICTION_STEPS = 2;
+const float NUM_PREDICTION_STEPS = 3;
 const bool SKIP_NORETURN = false;
-const float RANGE_NORETURN = 4.0; // only used if SKIP_NORETURN == False
+const bool ENFORCE_MSG_RANGE = true; // remove points outside range specified in LaserScan message
+const float RANGE_NORETURN = 0.0; // only used if SKIP_NORETURN == False, 
+                                  // use max range from message if set to 0.0
 const size_t NUM_THREADS = 4;
 const size_t MAGIC_CON = 8;
 
@@ -94,20 +96,21 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
 {
     float laser_angle = msg.angle_min;
+    float max_range = ENFORCE_MSG_RANGE ? msg.range_max : std::numeric_limits<float>::max();
+    float noreturn_range = RANGE_NORETURN == 0.0 ? msg.range_max : RANGE_NORETURN;
     for (const auto& range : msg.ranges) {
         // offset the particle based on the lidar position
         fix_angle(laser_angle);
-        if (range != 0.0)
+        if (range != 0.0 and range < max_range)
             insertRay(pose.x, pose.y, laser_angle, range);
         else if (not SKIP_NORETURN)
-            insertRay(pose.x, pose.y, laser_angle, RANGE_NORETURN, true);
+            insertRay(pose.x, pose.y, laser_angle, noreturn_range, true);
         laser_angle += msg.angle_increment;
     }
 }
 
 void LogOddsGrid::insertRay(float x, float y, const float angle, const float range, const bool no_return)
 {
-    // TODO check point to cell and ray cast is all correct
     x = (x + WIDTH / 2) * CELLS_PER_METER;
     y = (y + HEIGHT / 2) * CELLS_PER_METER;
 
