@@ -75,7 +75,7 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 2.1. update log odds based on scan using ray casting
     auto start_u = std::chrono::high_resolution_clock::now();
     log_odds.insertScan(*msg);
-    std::chrono::duration<float> time_update = std::chrono::high_resolution_clock::now() - start;
+    std::chrono::duration<float> time_update = std::chrono::high_resolution_clock::now() - start_u;
 
     // 2.2. convert log odds to probabilities
     probs_ = log_odds.toProbs();
