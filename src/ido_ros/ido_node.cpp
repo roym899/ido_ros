@@ -96,13 +96,13 @@ void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_m
         if (range != 0.0)
             insertRay(pose.x, pose.y, laser_angle, range);
         else if (not SKIP_NORETURN)
-            insertRay(pose.x, pose.y, laser_angle, RANGE_NORETURN);
+            insertRay(pose.x, pose.y, laser_angle, RANGE_NORETURN, true);
         laser_angle += msg.angle_increment;
         /* ROS_INFO("%f %f\n", laser_angle, range); */
     }
 }
 
-void LogOddsGrid::insertRay(float x, float y, float angle, float range)
+void LogOddsGrid::insertRay(float x, float y, const float angle, const float range, const bool no_return)
 {
     // TODO check point to cell and ray cast is all correct
     x = (x + WIDTH / 2) * CELLS_PER_METER;
@@ -121,8 +121,8 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
     int step_y = angle > 0 ? 1 : -1;
 
     // given the ray (x,y)+t*(vx,vy), check for which t the next cell in x and y direction is reached
-    float x_boundary = step_x > 0 ? std::ceil(x) : std::floor(x);
-    float y_boundary = step_y > 0 ? std::ceil(y) : std::floor(y);
+    float x_boundary = step_x > 0 ? std::ceil(x+0.5) : std::floor(x);
+    float y_boundary = step_y > 0 ? std::ceil(y+0.5) : std::floor(y);
     float t_max_x = (x_boundary - x) / v_x;
     float t_max_y = (y_boundary - y) / v_y;
 
@@ -132,15 +132,12 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
 
     // iterate until out of map or range reached
     while (std::sqrt(std::pow(x_discrete + 0.5 - x, 2) + std::pow(y_discrete + 0.5 - y, 2)) / CELLS_PER_METER < range - 0.5 / CELLS_PER_METER) {
-        if ((*this)(x_discrete, y_discrete) == 100)
-            break;
-
         if (x_discrete < 0 || x_discrete > cols) {
             break;
         } else if (y_discrete < 0 || y_discrete > rows) {
             break;
-        } else if ((*this)(y_discrete, x_discrete) >= -10) {
-            (*this)(y_discrete, x_discrete) -= 1;
+        } else if ((*this)(y_discrete, x_discrete) >= -15) {
+            (*this)(y_discrete, x_discrete) -= 3;
         }
 
         // go to next cell
@@ -152,13 +149,15 @@ void LogOddsGrid::insertRay(float x, float y, float angle, float range)
             y_discrete = y_discrete + step_y;
         }
     }
-    if (x_discrete < 0 || x_discrete > cols) {
+    if (no_return) // no return -> only clear, does not increase occupancy
+        return;
+    else if (x_discrete < 0 || x_discrete > cols) {
         return;
     } else if (y_discrete < 0 || y_discrete > rows) {
         return;
     }
-    if ((*this)(y_discrete, x_discrete) < 10) {
-        (*this)(y_discrete, x_discrete) += 5;
+    if ((*this)(y_discrete, x_discrete) <= 15) {
+        (*this)(y_discrete, x_discrete) += 3;
     }
 }
 

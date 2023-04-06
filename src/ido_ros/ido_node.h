@@ -43,7 +43,7 @@ struct LogOddsGrid : Matrix2D {
     {
     }
     void insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose = geometry_msgs::Pose2D());
-    void insertRay(float x, float y, float angle, float range);
+    void insertRay(float x, float y, const float angle, const float range, const bool no_return = false);
     ProbabilityGrid toProbs() const;
 };
 
