@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
 )
+find_package(OpenMP)
 
 ## System dependencies are found with CMake's conventions
 # TODO opencv if naive convolution is not fast enough
@@ -72,10 +73,11 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_node src/ido_ros/ido_node.cpp)
+# target_compile_options(${PROJECT_NAME}_node PRIVATE -march=native)
 # change output name -> rosrun ido_ros node
 set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} OpenMP::OpenMP_CXX)
 
 #############
 ## Install ##

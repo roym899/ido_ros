@@ -1,19 +1,24 @@
 #include <ido_ros/ido_node.h>
 
+#include <omp.h>
+
 #include <chrono>
 #include <cmath>
-#include <sstream>
-
 #include <cstdlib>
+#include <sstream>
+#include <thread>
 
 // TODO make these proper parameters
-const float WIDTH = 7;  // width of map in meters
-const float HEIGHT = 7; // height of map in meters
+const float WIDTH = 9;  // width of map in meters
+const float HEIGHT = 9; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
-const float MAX_VEL = 0.07;
-const bool SKIP_NORETURN = true;
-const float RANGE_NORETURN = 10.0; // only used if SKIP_NORETURN == False
+const float METER_PER_PREDICTIONSTEP = 0.1;  // i.e., computed from max velocity
+const float NUM_PREDICTION_STEPS = 2;
+const bool SKIP_NORETURN = false;
+const float RANGE_NORETURN = 4.0; // only used if SKIP_NORETURN == False
+const size_t NUM_THREADS = 4;
+const size_t MAGIC_CON = 8;
 
 void fix_angle(float& angle)
 {
@@ -52,14 +57,13 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
 
 void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
-    ROS_INFO("receiving scan");
-
     auto start = std::chrono::high_resolution_clock::now();
 
     // 1. prediction step
     // 1.1. prediction on prob using 2D convolution
     auto start_p = std::chrono::high_resolution_clock::now();
-    probs_ = predictMotion(probs_);
+    for(int i=0; i<NUM_PREDICTION_STEPS; ++i)
+        probs_ = predictMotion(probs_);
     std::chrono::duration<float> time_prediction = std::chrono::high_resolution_clock::now() - start_p;
 
     // 1.2. probs to log odds
@@ -82,8 +86,8 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
     ROS_INFO(
         "Prediction: %f Update: %f Total: %f ",
-        time_prediction.count(), 
-        time_update.count(), 
+        time_prediction.count(),
+        time_update.count(),
         time.count());
 }
 
@@ -98,7 +102,6 @@ void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_m
         else if (not SKIP_NORETURN)
             insertRay(pose.x, pose.y, laser_angle, RANGE_NORETURN, true);
         laser_angle += msg.angle_increment;
-        /* ROS_INFO("%f %f\n", laser_angle, range); */
     }
 }
 
@@ -121,8 +124,8 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
     int step_y = angle > 0 ? 1 : -1;
 
     // given the ray (x,y)+t*(vx,vy), check for which t the next cell in x and y direction is reached
-    float x_boundary = step_x > 0 ? std::ceil(x+0.5) : std::floor(x);
-    float y_boundary = step_y > 0 ? std::ceil(y+0.5) : std::floor(y);
+    float x_boundary = step_x > 0 ? std::ceil(x + 0.5) : std::floor(x);
+    float y_boundary = step_y > 0 ? std::ceil(y + 0.5) : std::floor(y);
     float t_max_x = (x_boundary - x) / v_x;
     float t_max_y = (y_boundary - y) / v_y;
 
@@ -137,7 +140,7 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
         } else if (y_discrete < 0 || y_discrete > rows) {
             break;
         } else if ((*this)(y_discrete, x_discrete) >= -15) {
-            (*this)(y_discrete, x_discrete) -= 3;
+            (*this)(y_discrete, x_discrete) -= 5;
         }
 
         // go to next cell
@@ -157,21 +160,21 @@ void LogOddsGrid::insertRay(float x, float y, const float angle, const float ran
         return;
     }
     if ((*this)(y_discrete, x_discrete) <= 15) {
-        (*this)(y_discrete, x_discrete) += 3;
+        (*this)(y_discrete, x_discrete) += 5;
     }
 }
 
 void IDONode::initKernel()
 {
-    const float max_cells = MAX_VEL * CELLS_PER_METER;
-    const size_t kernel_size = std::floor(max_cells);
+    const float cells_per_step = METER_PER_PREDICTIONSTEP * CELLS_PER_METER;
+    const size_t kernel_size = std::floor(cells_per_step);
     kernel_ = Matrix2D(2 * kernel_size + 1, 2 * kernel_size + 1, 0.0);
     const int center = kernel_size;
     size_t counter = 0;
     for (int i = 0; i < kernel_.rows; ++i) {
         for (int j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
-            if (cell_distance < max_cells)
+            if (cell_distance <= cells_per_step)
                 ++counter;
         }
     }
@@ -179,7 +182,7 @@ void IDONode::initKernel()
     for (int i = 0; i < kernel_.rows; ++i) {
         for (int j = 0; j < kernel_.cols; ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
-            if (cell_distance < max_cells)
+            if (cell_distance <= cells_per_step)
                 kernel_(i, j) = value;
             std::cout << kernel_(i, j) << " ";
         }
@@ -191,18 +194,20 @@ void IDONode::initKernel()
 
 ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const
 {
-    ProbabilityGrid prediction(occ_probs.rows, occ_probs.cols, 0.0);
-    for (int i = 0; i < occ_probs.rows; ++i) {
-        for (int j = 0; j < occ_probs.cols; ++j) {
-            for (int k = 0; k < kernel_.rows; ++k) {
-                for (int l = 0; l < kernel_.cols; ++l) {
-                    if (i - kernel_center_ + k < 0 || i - kernel_center_ + k >= occ_probs.rows
-                        || j - kernel_center_ + l < 0 || j - kernel_center_ + l >= occ_probs.cols)
-                        prediction(i, j) += 0.5 * kernel_(k, l);
-                    else {
-                        prediction(i, j) += 
-                            occ_probs(i - kernel_center_ + k, j - kernel_center_ + l) * kernel_(k, l);
-                    }
+    ProbabilityGrid prediction(occ_probs.rows, occ_probs.cols, PRIOR_PROB);
+    omp_set_num_threads(NUM_THREADS);
+
+#pragma omp parallel for
+    for (size_t i = kernel_center_; i < occ_probs.rows - kernel_center_; ++i) {
+        for (size_t j = kernel_center_; j < occ_probs.cols - kernel_center_ - MAGIC_CON + 1; j += MAGIC_CON) {
+            for (size_t offset = 0; offset < MAGIC_CON; ++offset)
+                prediction(i, j + offset) = 0;
+            for (size_t k = 0; k < kernel_.rows; ++k) {
+                for (size_t l = 0; l < kernel_.cols; ++l) {
+                    for (size_t offset = 0; offset < MAGIC_CON; ++offset)
+                        prediction(i, j + offset) += 
+                            occ_probs(i - kernel_center_ + k, 
+                                      j + offset - kernel_center_ + l) * kernel_(k, l);
                 }
             }
         }
