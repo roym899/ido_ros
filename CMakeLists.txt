@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   roscpp
   sensor_msgs
+  tf2
+  tf2_ros
 )
 find_package(OpenMP)
 

@@ -6,29 +6,33 @@
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
+#include <string>
 #include <thread>
 
 // TODO make these proper parameters
-const float WIDTH = 9;  // width of map in meters
+const float WIDTH = 15; // width of map in meters
 const float HEIGHT = 9; // height of map in meters
 const size_t CELLS_PER_METER = 15;
 const float PRIOR_PROB = 0.5;
-const float METER_PER_PREDICTIONSTEP = 0.1;  // i.e., computed from max velocity
+const float METER_PER_PREDICTIONSTEP = 0.1; // i.e., computed from max velocity
 const float NUM_PREDICTION_STEPS = 3;
 const bool SKIP_NORETURN = false;
 const bool ENFORCE_MSG_RANGE = true; // remove points outside range specified in LaserScan message
-const float RANGE_NORETURN = 0.0; // only used if SKIP_NORETURN == False, 
-                                  // use max range from message if set to 0.0
+const float RANGE_NORETURN = 0.0;    // only used if SKIP_NORETURN == False,
+                                     // use max range from message if set to 0.0
 const size_t NUM_THREADS = 4;
 const size_t MAGIC_CON = 8;
 
-void fix_angle(float& angle)
+const auto MAP_FRAME = std::string("map");
+const auto SENSOR_FRAME = std::string(""); // if empty sensor msg's is used
+const bool LATEST_POSE = true;             // use latest pose instead of waiting for transform to arrive
+
+float fix_angle(float angle)
 {
     angle = std::fmod(angle + M_PI, 2 * M_PI);
     if (angle < 0)
-        angle += M_PI;
-    else
-        angle -= M_PI;
+        return angle += M_PI;
+    return angle -= M_PI;
 }
 
 nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
@@ -36,7 +40,7 @@ nav_msgs::OccupancyGrid ProbabilityGrid::toOccupancyGridMsg() const
     nav_msgs::OccupancyGrid msg;
 
     // 1. set header, width, height
-    msg.header.frame_id = "base_scan";
+    msg.header.frame_id = MAP_FRAME;
     msg.header.stamp = ros::Time::now();
     msg.info.width = cols;
     msg.info.height = rows;
@@ -64,7 +68,7 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 1. prediction step
     // 1.1. prediction on prob using 2D convolution
     auto start_p = std::chrono::high_resolution_clock::now();
-    for(size_t i=0; i<NUM_PREDICTION_STEPS; ++i)
+    for (size_t i = 0; i < NUM_PREDICTION_STEPS; ++i)
         probs_ = predictMotion(probs_);
     std::chrono::duration<float> time_prediction = std::chrono::high_resolution_clock::now() - start_p;
 
@@ -74,9 +78,8 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     // 2. update step
     // 2.1. update log odds based on scan using ray casting
     auto start_u = std::chrono::high_resolution_clock::now();
-    log_odds.insertScan(*msg);
+    log_odds.insertScan(*msg, getSensorPose(msg));
     std::chrono::duration<float> time_update = std::chrono::high_resolution_clock::now() - start_u;
-
     // 2.2. convert log odds to probabilities
     probs_ = log_odds.toProbs();
     // 2.3. convert to ROS message
@@ -93,6 +96,20 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
         time.count());
 }
 
+geometry_msgs::Pose2D IDONode::getSensorPose(const sensor_msgs::LaserScan::ConstPtr& msg) const
+{
+    geometry_msgs::TransformStamped sensor_transform = transform_buffer_.lookupTransform(
+        MAP_FRAME,
+        SENSOR_FRAME.length() ? SENSOR_FRAME : msg->header.frame_id,
+        LATEST_POSE ? ros::Time(0) : msg->header.stamp,
+        ros::Duration(1));
+    geometry_msgs::Pose2D sensor_pose;
+    sensor_pose.x = sensor_transform.transform.translation.x;
+    sensor_pose.y = sensor_transform.transform.translation.y;
+    sensor_pose.theta = 2 * std::acos(sensor_transform.transform.rotation.w);
+    return sensor_pose;
+}
+
 void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_msgs::Pose2D& pose)
 {
     float laser_angle = msg.angle_min;
@@ -100,11 +117,11 @@ void LogOddsGrid::insertScan(const sensor_msgs::LaserScan& msg, const geometry_m
     float noreturn_range = RANGE_NORETURN == 0.0 ? msg.range_max : RANGE_NORETURN;
     for (const auto& range : msg.ranges) {
         // offset the particle based on the lidar position
-        fix_angle(laser_angle);
+        float ray_angle = fix_angle(laser_angle + pose.theta);
         if (range != 0.0 and range < max_range)
-            insertRay(pose.x, pose.y, laser_angle, range);
+            insertRay(pose.x, pose.y, ray_angle, range);
         else if (not SKIP_NORETURN)
-            insertRay(pose.x, pose.y, laser_angle, noreturn_range, true);
+            insertRay(pose.x, pose.y, ray_angle, noreturn_range, true);
         laser_angle += msg.angle_increment;
     }
 }
@@ -205,9 +222,9 @@ ProbabilityGrid IDONode::predictMotion(const ProbabilityGrid& occ_probs) const
             for (size_t k = 0; k < kernel_.rows; ++k) {
                 for (size_t l = 0; l < kernel_.cols; ++l) {
                     for (size_t offset = 0; offset < MAGIC_CON; ++offset)
-                        prediction(i, j + offset) += 
-                            occ_probs(i - kernel_center_ + k, 
-                                      j + offset - kernel_center_ + l) * kernel_(k, l);
+                        prediction(i, j + offset) += occ_probs(i - kernel_center_ + k,
+                                                         j + offset - kernel_center_ + l)
+                            * kernel_(k, l);
                 }
             }
         }
@@ -241,6 +258,7 @@ LogOddsGrid ProbabilityGrid::toLogOdds() const
 
 IDONode::IDONode()
     : nh_priv_("~")
+    , transform_listener_(transform_buffer_)
     , probs_(HEIGHT * CELLS_PER_METER, WIDTH * CELLS_PER_METER, PRIOR_PROB)
     , kernel_(0, 0, 0)
 {

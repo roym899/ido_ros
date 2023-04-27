@@ -4,6 +4,8 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 
 class LogOddsGrid;
 
@@ -59,6 +61,9 @@ private:
     ros::Publisher occ_pub_;
     ros::Subscriber scan_sub_;
 
+    tf2_ros::Buffer transform_buffer_;
+    tf2_ros::TransformListener transform_listener_;
+
     ProbabilityGrid probs_;
 
     Matrix2D kernel_;
@@ -67,4 +72,5 @@ private:
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
     void initKernel();
     ProbabilityGrid predictMotion(const ProbabilityGrid& occ_probs) const;
+    geometry_msgs::Pose2D getSensorPose(const sensor_msgs::LaserScan::ConstPtr& msg) const;
 };
