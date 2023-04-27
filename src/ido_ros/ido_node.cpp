@@ -171,16 +171,16 @@ void IDONode::initKernel()
     kernel_ = Matrix2D(2 * kernel_size + 1, 2 * kernel_size + 1, 0.0);
     const int center = kernel_size;
     size_t counter = 0;
-    for (size_t i = 0; i < kernel_.rows; ++i) {
-        for (size_t j = 0; j < kernel_.cols; ++j) {
+    for (int i = 0; i < static_cast<int>(kernel_.rows); ++i) {
+        for (int j = 0; j < static_cast<int>(kernel_.cols); ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
             if (cell_distance <= cells_per_step)
                 ++counter;
         }
     }
     const float value = 1.0 / counter;
-    for (size_t i = 0; i < kernel_.rows; ++i) {
-        for (size_t j = 0; j < kernel_.cols; ++j) {
+    for (int i = 0; i < static_cast<int>(kernel_.rows); ++i) {
+        for (int j = 0; j < static_cast<int>(kernel_.cols); ++j) {
             float cell_distance = std::sqrt(std::pow(i - center, 2) + std::pow(j - center, 2));
             if (cell_distance <= cells_per_step)
                 kernel_(i, j) = value;
