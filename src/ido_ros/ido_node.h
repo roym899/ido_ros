@@ -21,6 +21,16 @@ struct Matrix2D {
   float& operator()(const size_t i, const size_t j) {
     return const_cast<float&>((*const_cast<const Matrix2D*>(this))(i, j));
   };
+  Matrix2D& operator+=(const float rhs) {
+    for (size_t i = 0; i < rows; ++i)
+      for (size_t j = 0; j < cols; ++j) (*this)(i, j) += rhs;
+    return *this;
+  }
+  Matrix2D& operator*=(const float rhs) {
+    for (size_t i = 0; i < rows; ++i)
+      for (size_t j = 0; j < cols; ++j) (*this)(i, j) *= rhs;
+    return *this;
+  }
 };
 
 struct ProbabilityGrid : Matrix2D {

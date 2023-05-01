@@ -12,7 +12,8 @@
 const float WIDTH = 15;  // width of map in meters
 const float HEIGHT = 9;  // height of map in meters
 const size_t CELLS_PER_METER = 15;
-const float PRIOR_PROB = 0.5;
+const float PRIOR_PROB = 0.1;
+const float DECAY_FACTOR = 0.95;
 const float METER_PER_PREDICTIONSTEP = 0.1;  // i.e., computed from max velocity
 const float NUM_PREDICTION_STEPS = 3;
 const bool SKIP_NORETURN = false;
@@ -23,8 +24,13 @@ const float RANGE_NORETURN = 0.0;  // only used if SKIP_NORETURN == False,
 const size_t NUM_THREADS = 4;
 const size_t MAGIC_CON = 8;
 
-const auto MAP_FRAME = std::string("map");
-const auto SENSOR_FRAME = std::string("");  // if empty, sensor msg's is used
+// typical frame settings
+// for static sensor set MAP_FRAME == SENSOR_FRAME == (frame of sensor)
+// for odom only set MAP_FRAME == odom == 
+// for proper setup set MAP_FRAME == map, SENSOR_FRAME == "" == (frame of sensor)
+const auto MAP_FRAME = std::string("base_scan");
+const auto SENSOR_FRAME = std::string("base_scan");  // if empty, sensor msg's is used
+
 const bool LATEST_POSE =
     true;  // use latest pose instead of waiting for transform to arrive
 
@@ -72,6 +78,12 @@ void IDONode::scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg) {
 
   // 1.2. probs to log odds
   LogOddsGrid log_odds = probs_.toLogOdds();
+  
+  // 1.3 decay factor
+  if(DECAY_FACTOR != 1.0) {
+    log_odds *= DECAY_FACTOR;
+    log_odds += (1 - DECAY_FACTOR) * std::log(PRIOR_PROB / (1-PRIOR_PROB));
+  }
 
   // 2. update step
   // 2.1. update log odds based on scan using ray casting
@@ -179,7 +191,7 @@ void LogOddsGrid::insertRay(float x, float y, const float angle,
     return;
   }
   if ((*this)(y_discrete, x_discrete) <= 15) {
-    (*this)(y_discrete, x_discrete) += 5;
+    (*this)(y_discrete, x_discrete) += 10;
   }
 }
 
