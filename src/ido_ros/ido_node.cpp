@@ -12,7 +12,7 @@
 const float WIDTH = 15;  // width of map in meters
 const float HEIGHT = 9;  // height of map in meters
 const size_t CELLS_PER_METER = 15;
-const float PRIOR_PROB = 0.1;
+const float PRIOR_PROB = 0.5;
 const float DECAY_FACTOR = 0.95;
 const float METER_PER_PREDICTIONSTEP = 0.1;  // i.e., computed from max velocity
 const float NUM_PREDICTION_STEPS = 3;
