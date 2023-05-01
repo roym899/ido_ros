@@ -25,11 +25,12 @@ const size_t NUM_THREADS = 4;
 const size_t MAGIC_CON = 8;
 
 // typical frame settings
-// for static sensor set MAP_FRAME == SENSOR_FRAME == (frame of sensor)
-// for odom only set MAP_FRAME == odom == 
-// for proper setup set MAP_FRAME == map, SENSOR_FRAME == "" == (frame of sensor)
-const auto MAP_FRAME = std::string("base_scan");
-const auto SENSOR_FRAME = std::string("base_scan");  // if empty, sensor msg's is used
+// for proper setup (map -> sensor transform available)
+//  -> MAP_FRAME == map, SENSOR_FRAME == "" (frame of sensor)
+// if map -> sensor transform is not available you can also run in local frame
+//   -> MAP_FRAME == SENSOR_FRAME  (only correct for a static sensor)
+const auto MAP_FRAME = std::string("map");
+const auto SENSOR_FRAME = std::string("");  // if empty, sensor msg's is used
 
 const bool LATEST_POSE =
     true;  // use latest pose instead of waiting for transform to arrive
